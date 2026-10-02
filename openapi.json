@@ -1,0 +1,2506 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IP-Max API",
+    "version": "1.0.0",
+    "description": "Prepaid GeoIP and IP intelligence lookups. Each product has its own CNY balance; amounts are expressed in micro-CNY (1 CNY = 1,000,000) and are exact multiples of 0.5.",
+    "contact": {
+      "name": "IP-Max",
+      "url": "https://ipm.ax",
+      "email": "opensource@ipm.ax"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.ipm.ax",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Billing",
+      "description": "Prices and account balances."
+    },
+    {
+      "name": "Lookup",
+      "description": "Billable IP lookups."
+    }
+  ],
+  "paths": {
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "getCatalog",
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Current product prices",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Availability, unit prices and purchase contact.",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Unix time in seconds when the current window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; see Retry-After.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Purchase contact is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account": {
+      "get": {
+        "operationId": "getAccount",
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Account balances and the latest 100 ledger entries",
+        "responses": {
+          "200": {
+            "description": "The authenticated account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; see Retry-After.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing service is not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geoip": {
+      "post": {
+        "operationId": "lookupGeoIp",
+        "tags": [
+          "Lookup"
+        ],
+        "summary": "Geography and basic ASN identity",
+        "description": "Charges the current catalog unit price for each successful response. Reuse the same Idempotency-Key when retrying the same product and IP: completed retries return the original result and receipt without another charge. Validation errors, missing records, insufficient balance and failed requests are never charged.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "description": "16–120 printable ASCII characters identifying this billable request. A UUID is a good choice.",
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 120,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product response.",
+            "headers": {
+              "X-Billing-Receipt": {
+                "description": "Receipt id of the charge.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Billing-Product": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "X-Billing-Cost-Micros": {
+                "description": "Amount charged in micro-CNY.",
+                "schema": {
+                  "type": "number"
+                }
+              },
+              "X-Billing-Replayed": {
+                "description": "true when this is a stored result returned for a repeated idempotency key.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeoIpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IP or Idempotency-Key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient product balance; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The address is not in the database; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The price changed during processing, or the Idempotency-Key was already used for a different query; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; see Retry-After. Nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intelligence": {
+      "post": {
+        "operationId": "lookupIntelligence",
+        "tags": [
+          "Lookup"
+        ],
+        "summary": "Threat and network intelligence, without geography",
+        "description": "Charges the current catalog unit price for each successful response. Reuse the same Idempotency-Key when retrying the same product and IP: completed retries return the original result and receipt without another charge. Validation errors, missing records, insufficient balance and failed requests are never charged.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "description": "16–120 printable ASCII characters identifying this billable request. A UUID is a good choice.",
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 120,
+              "pattern": "^[!-~]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product response.",
+            "headers": {
+              "X-Billing-Receipt": {
+                "description": "Receipt id of the charge.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Billing-Product": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              },
+              "X-Billing-Cost-Micros": {
+                "description": "Amount charged in micro-CNY.",
+                "schema": {
+                  "type": "number"
+                }
+              },
+              "X-Billing-Replayed": {
+                "description": "true when this is a stored result returned for a repeated idempotency key.",
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntelligenceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IP or Idempotency-Key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient product balance; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The address is not in the database; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The price changed during processing, or the Idempotency-Key was already used for a different query; nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type must be application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; see Retry-After. Nothing was charged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "sg_live_*",
+        "description": "Send the API key as `Authorization: Bearer <key>`."
+      }
+    },
+    "schemas": {
+      "AbuseCategoryCount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "AbuseContact": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "network": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "country",
+          "email",
+          "network",
+          "phone"
+        ],
+        "additionalProperties": false,
+        "description": "Registered abuse contact."
+      },
+      "AbuseReports": {
+        "type": "object",
+        "properties": {
+          "confidence_score": {
+            "type": "integer"
+          },
+          "total_reports": {
+            "type": "integer"
+          },
+          "distinct_reporters": {
+            "type": "integer"
+          },
+          "last_reported_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_whitelisted": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AbuseCategoryCount"
+            }
+          }
+        },
+        "required": [
+          "confidence_score",
+          "total_reports",
+          "distinct_reporters",
+          "last_reported_at",
+          "is_whitelisted",
+          "categories"
+        ],
+        "additionalProperties": false,
+        "description": "Community abuse-report aggregates over the last 30 days."
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string",
+            "description": "Display prefix of the API key used for this request."
+          },
+          "wallets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Wallet"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LedgerEntry"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "keyPrefix",
+          "wallets",
+          "entries"
+        ],
+        "additionalProperties": false,
+        "description": "The authenticated account with per-product balances and its latest 100 ledger entries."
+      },
+      "AccountResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Account"
+          }
+        },
+        "description": "Successful account response envelope."
+      },
+      "AnonymizerExemptionReason": {
+        "type": "string",
+        "enum": [
+          "cloudflare_cdn_origin",
+          "search_engine_crawler"
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "request_id",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Quote this id when contacting support."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether the same request may succeed later."
+          }
+        }
+      },
+      "AsnConnectivity": {
+        "type": "object",
+        "properties": {
+          "declared_traffic": {
+            "type": "string"
+          },
+          "exchanges_total": {
+            "type": "integer",
+            "description": "Total exchanges known for this ASN; present when the exchange list was truncated."
+          },
+          "estimated_capacity": {
+            "$ref": "#/components/schemas/AsnEstimatedCapacity"
+          },
+          "exchanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AsnExchange"
+            }
+          }
+        },
+        "required": [
+          "declared_traffic",
+          "estimated_capacity",
+          "exchanges"
+        ],
+        "additionalProperties": false,
+        "description": "Interconnection inventory of the origin ASN. Capacity ranges are estimates."
+      },
+      "AsnEstimatedCapacity": {
+        "type": "object",
+        "properties": {
+          "lower_gbps": {
+            "type": "number"
+          },
+          "upper_gbps": {
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lower_gbps",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "AsnExchange": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "physical",
+              "virtual"
+            ]
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AsnExchangePort"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "ports"
+        ],
+        "additionalProperties": false
+      },
+      "AsnExchangePort": {
+        "type": "object",
+        "properties": {
+          "capacity_gbps": {
+            "type": "number"
+          },
+          "operational": {
+            "type": "boolean"
+          },
+          "rs_peer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capacity_gbps"
+        ],
+        "additionalProperties": false
+      },
+      "Blocklist": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "site",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "Catalog": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "const": "CNY"
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Price"
+            }
+          },
+          "purchaseEmail": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Whether paid queries are accepted right now."
+          }
+        },
+        "required": [
+          "currency",
+          "prices",
+          "purchaseEmail",
+          "available"
+        ],
+        "additionalProperties": false,
+        "description": "Current product prices, availability and the purchase contact."
+      },
+      "CatalogResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/Catalog"
+          }
+        },
+        "description": "Successful catalog response envelope."
+      },
+      "Company": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "network": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "domain",
+          "phone",
+          "type",
+          "network",
+          "country"
+        ],
+        "additionalProperties": false,
+        "description": "Registered network owner contact."
+      },
+      "CpeObservation": {
+        "type": "object",
+        "properties": {
+          "cpe": {
+            "type": "string"
+          },
+          "part": {
+            "$ref": "#/components/schemas/CpePart"
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "product": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "cpe",
+          "part",
+          "vendor",
+          "product",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "CpePart": {
+        "type": "string",
+        "enum": [
+          "application",
+          "operating_system",
+          "hardware"
+        ]
+      },
+      "Currency": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "native": {
+            "type": "string"
+          },
+          "plural": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "code",
+          "symbol",
+          "native",
+          "plural"
+        ],
+        "additionalProperties": false
+      },
+      "DnsHostnameEvidence": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fdns",
+                "ct"
+              ]
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forward_confirmed": {
+            "type": "boolean"
+          },
+          "first_seen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_seen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "hostname",
+          "kinds",
+          "sources",
+          "forward_confirmed",
+          "first_seen",
+          "last_seen"
+        ],
+        "additionalProperties": false
+      },
+      "DnsPtrEvidence": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "forward_confirmed": {
+            "type": "boolean"
+          },
+          "first_seen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_seen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "hostname",
+          "sources",
+          "forward_confirmed",
+          "first_seen",
+          "last_seen"
+        ],
+        "additionalProperties": false
+      },
+      "DnsRecords": {
+        "type": "object",
+        "properties": {
+          "ptr": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ptr_evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DnsPtrEvidence"
+            }
+          },
+          "hostnames": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DnsHostnameEvidence"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ptr",
+          "ptr_evidence",
+          "hostnames",
+          "sources",
+          "snapshot_id",
+          "updated_at"
+        ],
+        "additionalProperties": false,
+        "description": "Passive DNS evidence for the address."
+      },
+      "ErrorCode": {
+        "type": "integer",
+        "description": "Opaque numeric error id. Known values: 1000 invalid request, 1001 invalid payload, 1002 invalid IP, 1003 IP not found, 1004 route not found, 1010 invalid or revoked API key, 1011 rate limit exceeded, 1400 service unavailable, 1401 internal error, 1500 insufficient product balance, 1501 idempotency key conflict. New values may be added; treat unknown values as opaque."
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "data",
+          "error"
+        ],
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "const": false
+          },
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "description": "Error envelope shared by every endpoint."
+      },
+      "GeoIpAs": {
+        "type": "object",
+        "properties": {
+          "asn": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "asn",
+          "name",
+          "domain"
+        ],
+        "additionalProperties": false
+      },
+      "GeoIpData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "as": {
+            "$ref": "#/components/schemas/GeoIpAs"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "geo": {
+            "$ref": "#/components/schemas/Geolocation"
+          },
+          "netmask": {
+            "type": "string",
+            "description": "Netmask of the matched database record."
+          },
+          "prefix_length": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Prefix length of the matched database record."
+          },
+          "is_bogon": {
+            "type": "boolean"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeZone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calling_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "as",
+          "geo",
+          "ip",
+          "is_bogon",
+          "netmask",
+          "prefix_length"
+        ],
+        "description": "Geography, country enrichment and basic ASN identity for one IP address."
+      },
+      "GeoIpResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/GeoIpData"
+          }
+        },
+        "description": "Successful GeoIP response envelope."
+      },
+      "Geolocation": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "region_code": {
+            "type": "string"
+          },
+          "adcode": {
+            "type": "string",
+            "description": "Administrative division code for mainland China, otherwise empty."
+          },
+          "country": {
+            "type": "string"
+          },
+          "country_code": {
+            "type": "string"
+          },
+          "continent": {
+            "type": "string"
+          },
+          "continent_code": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Latitude in decimal degrees, or null when unknown."
+          },
+          "longitude": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Longitude in decimal degrees, or null when unknown."
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "postal_code": {
+            "type": "string"
+          },
+          "radius": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Accuracy radius in kilometres, or null when unknown."
+          },
+          "area_code": {
+            "type": "string"
+          },
+          "plus_code": {
+            "type": "string"
+          },
+          "country_en": {
+            "type": "string"
+          },
+          "country_zh": {
+            "type": "string"
+          },
+          "region_en": {
+            "type": "string"
+          },
+          "region_zh": {
+            "type": "string"
+          },
+          "city_en": {
+            "type": "string"
+          },
+          "city_zh": {
+            "type": "string"
+          },
+          "district_en": {
+            "type": "string"
+          },
+          "district_zh": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city",
+          "region",
+          "district",
+          "region_code",
+          "adcode",
+          "country",
+          "country_code",
+          "continent",
+          "continent_code",
+          "latitude",
+          "longitude",
+          "timezone",
+          "postal_code",
+          "radius"
+        ],
+        "additionalProperties": false
+      },
+      "IntelligenceAs": {
+        "type": "object",
+        "properties": {
+          "asn": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_en": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectivity": {
+            "$ref": "#/components/schemas/AsnConnectivity"
+          }
+        },
+        "required": [
+          "asn",
+          "name",
+          "domain",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "IntelligenceData": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "as": {
+            "$ref": "#/components/schemas/IntelligenceAs"
+          },
+          "intelligence": {
+            "$ref": "#/components/schemas/LiveIntelligence",
+            "description": "Best-effort live observations gathered at query time. An empty observation is not a clean-risk verdict."
+          },
+          "ip": {
+            "type": "string"
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkInfo"
+          },
+          "network_class": {
+            "$ref": "#/components/schemas/NetworkClassification"
+          },
+          "mobile": {
+            "$ref": "#/components/schemas/MobileCarrier"
+          },
+          "threat": {
+            "$ref": "#/components/schemas/ThreatInfo"
+          },
+          "rpki": {
+            "$ref": "#/components/schemas/RpkiInfo"
+          },
+          "company": {
+            "$ref": "#/components/schemas/Company"
+          },
+          "abuse": {
+            "$ref": "#/components/schemas/AbuseContact"
+          },
+          "dns": {
+            "$ref": "#/components/schemas/DnsRecords"
+          },
+          "is_bogon": {
+            "type": "boolean"
+          },
+          "is_anycast": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_mobile": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_hosting": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_satellite": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "as",
+          "intelligence",
+          "ip",
+          "is_anycast",
+          "is_bogon",
+          "is_hosting",
+          "is_mobile",
+          "is_satellite",
+          "network_class"
+        ],
+        "description": "Threat and network intelligence for one IP address. Geography is intentionally absent; use the GeoIP product for it."
+      },
+      "IntelligenceResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "data"
+        ],
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/IntelligenceData"
+          }
+        },
+        "description": "Successful intelligence response envelope."
+      },
+      "LedgerEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "credit",
+              "charge",
+              "adjustment"
+            ]
+          },
+          "amountMicros": {
+            "type": "number",
+            "description": "Movement amount in micro-CNY. Credits and charges are positive; adjustments may be signed."
+          },
+          "balanceMicros": {
+            "type": "number",
+            "description": "Wallet balance after this entry, in micro-CNY."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "product",
+          "kind",
+          "amountMicros",
+          "balanceMicros",
+          "reference",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "description": "One immutable ledger movement."
+      },
+      "LiveIntelligence": {
+        "type": "object",
+        "properties": {
+          "ptr": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PtrIntelligence"
+            }
+          },
+          "nameservers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cpes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CpeObservation"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveIntelligenceTag"
+            }
+          },
+          "revoked_tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RevokedNetworkTag"
+            },
+            "description": "Database network tags contradicted by live evidence for this address."
+          },
+          "usage_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rpki": {
+            "$ref": "#/components/schemas/RpkiInfo"
+          },
+          "abuse": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AbuseReports"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transfers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceTransfer"
+            }
+          },
+          "segment_probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SegmentProbe"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Observation of the /24 gateway (.1) for IPv4 targets; null when the target is the gateway itself or nothing was observed."
+          }
+        },
+        "required": [
+          "ptr",
+          "nameservers",
+          "cpes",
+          "tags",
+          "revoked_tags",
+          "usage_type"
+        ],
+        "additionalProperties": false,
+        "description": "Best-effort live observations gathered at query time. Reserved addresses always carry empty observations."
+      },
+      "LiveIntelligenceTag": {
+        "type": "string",
+        "enum": [
+          "hosting",
+          "public_dns_resolver",
+          "web_server",
+          "vpn",
+          "residential_proxy"
+        ]
+      },
+      "LookupRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ip"
+        ],
+        "properties": {
+          "ip": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "IPv4 or IPv6 address to query."
+          }
+        }
+      },
+      "MobileCarrier": {
+        "type": "object",
+        "properties": {
+          "mcc": {
+            "type": "string"
+          },
+          "mnc": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mcc",
+          "mnc",
+          "brand"
+        ],
+        "additionalProperties": false
+      },
+      "NetworkClass": {
+        "type": "string",
+        "enum": [
+          "mobile",
+          "hosting",
+          "residential",
+          "business",
+          "organization",
+          "government",
+          "military",
+          "education",
+          "library",
+          "dedicated",
+          "satellite",
+          "ixp",
+          "search_engine",
+          "ai_crawler",
+          "unknown"
+        ]
+      },
+      "NetworkClassEvidence": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string",
+            "enum": [
+              "mobile",
+              "hosting",
+              "residential",
+              "business",
+              "organization",
+              "government",
+              "military",
+              "education",
+              "library",
+              "dedicated",
+              "satellite",
+              "ixp",
+              "search_engine",
+              "ai_crawler"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "domestic_isp",
+              "usage_type",
+              "mobile_carrier",
+              "connection_type",
+              "network_tag",
+              "threat_intelligence",
+              "asn_tag",
+              "ixp"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "ip",
+              "prefix",
+              "asn"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "class",
+          "source",
+          "scope",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "NetworkClassification": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "$ref": "#/components/schemas/NetworkClass"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "unknown"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/NetworkClassSource"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "mobile",
+                "hosting",
+                "residential",
+                "business",
+                "organization",
+                "government",
+                "military",
+                "education",
+                "library",
+                "dedicated",
+                "satellite",
+                "ixp",
+                "search_engine",
+                "ai_crawler"
+              ]
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkClassEvidence"
+            }
+          }
+        },
+        "required": [
+          "primary",
+          "confidence",
+          "source",
+          "conflicts",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "description": "A single usage class for the address, plus contradictory evidence kept for audit."
+      },
+      "NetworkClassSource": {
+        "type": "string",
+        "enum": [
+          "domestic_isp",
+          "usage_type",
+          "mobile_carrier",
+          "connection_type",
+          "network_tag",
+          "threat_intelligence",
+          "asn_tag",
+          "ixp",
+          "none"
+        ]
+      },
+      "NetworkInfo": {
+        "type": "object",
+        "properties": {
+          "connection_type": {
+            "type": "string"
+          },
+          "usage_type": {
+            "type": "string"
+          },
+          "address_type": {
+            "type": "string"
+          },
+          "net_speed": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "connection_type",
+          "usage_type",
+          "net_speed",
+          "tags"
+        ],
+        "additionalProperties": false
+      },
+      "Price": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unitMicros": {
+            "type": "number",
+            "description": "Price per successful query in micro-CNY (1 CNY = 1,000,000), always an exact multiple of 0.5."
+          }
+        },
+        "required": [
+          "product",
+          "name",
+          "unitMicros"
+        ],
+        "additionalProperties": false,
+        "description": "Unit price of one successful query."
+      },
+      "Product": {
+        "type": "string",
+        "enum": [
+          "geoip",
+          "intelligence"
+        ]
+      },
+      "PtrAsnMismatchIntelligence": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "asn_mismatch"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/PtrOperator"
+          },
+          "observed_asn": {
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PtrEvidence"
+          }
+        },
+        "required": [
+          "hostname",
+          "status",
+          "operator",
+          "observed_asn",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "PtrConfidence": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/PtrConfidenceLevel"
+          },
+          "score": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "level",
+          "score"
+        ],
+        "additionalProperties": false
+      },
+      "PtrConfidenceLevel": {
+        "type": "string",
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ]
+      },
+      "PtrDatasetName": {
+        "type": "string",
+        "enum": [
+          "geonames",
+          "ourairports",
+          "operator-overrides",
+          "unlocode"
+        ]
+      },
+      "PtrEvidence": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "ruleset_version": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PtrEvidenceSource"
+            }
+          }
+        },
+        "required": [
+          "rule_id",
+          "ruleset_version",
+          "sources"
+        ],
+        "additionalProperties": false
+      },
+      "PtrEvidenceSource": {
+        "type": "object",
+        "properties": {
+          "dataset": {
+            "$ref": "#/components/schemas/PtrDatasetName"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "PtrHint": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PtrHintKind"
+          }
+        },
+        "required": [
+          "value",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "PtrHintKind": {
+        "type": "string",
+        "enum": [
+          "iata",
+          "unlocode",
+          "clli",
+          "city_name",
+          "operator_code"
+        ]
+      },
+      "PtrIntelligence": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PtrLocatedIntelligence"
+          },
+          {
+            "$ref": "#/components/schemas/PtrAsnMismatchIntelligence"
+          },
+          {
+            "$ref": "#/components/schemas/PtrUnmatchedIntelligence"
+          }
+        ],
+        "description": "Reverse-DNS hostname with optional operator and metro location parsed from it."
+      },
+      "PtrLocatedIntelligence": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "located"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/PtrOperator"
+          },
+          "hint": {
+            "$ref": "#/components/schemas/PtrHint"
+          },
+          "location": {
+            "$ref": "#/components/schemas/PtrMetroLocation"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/PtrConfidence"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/PtrEvidence"
+          }
+        },
+        "required": [
+          "hostname",
+          "status",
+          "operator",
+          "hint",
+          "location",
+          "confidence",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "PtrMetroLocation": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": "string"
+          },
+          "country_code": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          },
+          "precision": {
+            "type": "string",
+            "const": "metro"
+          }
+        },
+        "required": [
+          "city",
+          "region",
+          "region_code",
+          "country",
+          "country_code",
+          "latitude",
+          "longitude",
+          "precision"
+        ],
+        "additionalProperties": false
+      },
+      "PtrOperator": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "asn": {
+            "type": "string"
+          },
+          "suffix": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "asn",
+          "suffix"
+        ],
+        "additionalProperties": false
+      },
+      "PtrUnmatchedIntelligence": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "unmatched"
+          }
+        },
+        "required": [
+          "hostname",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "ResourceTransfer": {
+        "type": "object",
+        "properties": {
+          "transfer_time": {
+            "type": "string"
+          },
+          "transfer_type": {
+            "type": "string"
+          },
+          "source_resource": {
+            "type": "string"
+          },
+          "recipient_resource": {
+            "type": "string"
+          },
+          "source_registry": {
+            "type": "string"
+          },
+          "recipient_registry": {
+            "type": "string"
+          },
+          "source_holder": {
+            "type": "string"
+          },
+          "recipient_holder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "transfer_time",
+          "transfer_type",
+          "source_resource",
+          "recipient_resource",
+          "source_registry",
+          "recipient_registry",
+          "source_holder",
+          "recipient_holder"
+        ],
+        "additionalProperties": false,
+        "description": "One RIR resource transfer covering the address or its origin ASN."
+      },
+      "RevokedNetworkTag": {
+        "type": "string",
+        "enum": [
+          "business_broadband",
+          "home_isp",
+          "mobile_isp"
+        ]
+      },
+      "RpkiInfo": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RpkiStatus"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RpkiSource"
+          },
+          "route_source": {
+            "type": "string",
+            "const": "Local DB"
+          },
+          "origin_asn": {
+            "type": "string"
+          },
+          "route_prefix": {
+            "type": "string"
+          },
+          "roa_prefix": {
+            "type": "string"
+          },
+          "roa_asn": {
+            "type": "string"
+          },
+          "max_length": {
+            "type": "integer"
+          },
+          "ta": {
+            "type": "string"
+          },
+          "rtr": {
+            "$ref": "#/components/schemas/RpkiRtr"
+          },
+          "validator": {
+            "$ref": "#/components/schemas/RpkiValidator"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false,
+        "description": "RPKI route origin validation of the covering route."
+      },
+      "RpkiRtr": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "Cloudflare",
+              "MFEED",
+              "RTR"
+            ]
+          },
+          "server": {
+            "type": "string"
+          },
+          "lastUpdated": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix time in milliseconds of the last validator sync."
+          }
+        },
+        "required": [
+          "source",
+          "lastUpdated"
+        ],
+        "additionalProperties": false
+      },
+      "RpkiSource": {
+        "type": "string",
+        "enum": [
+          "RTR Live",
+          "Local Cache",
+          "Local DB"
+        ]
+      },
+      "RpkiStatus": {
+        "type": "string",
+        "enum": [
+          "valid",
+          "invalid_asn",
+          "invalid_length",
+          "unknown",
+          "not_routed"
+        ]
+      },
+      "RpkiValidator": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "Local Cache"
+          },
+          "engine": {
+            "type": "string",
+            "const": "Local Cache"
+          },
+          "lastUpdated": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix time in milliseconds of the last validator sync."
+          }
+        },
+        "required": [
+          "source",
+          "engine",
+          "lastUpdated"
+        ],
+        "additionalProperties": false
+      },
+      "SegmentProbe": {
+        "type": "object",
+        "properties": {
+          "ip": {
+            "type": "string"
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveIntelligenceTag"
+            }
+          }
+        },
+        "required": [
+          "ip",
+          "ports",
+          "tags"
+        ],
+        "additionalProperties": false
+      },
+      "ThreatInfo": {
+        "type": "object",
+        "properties": {
+          "is_tor": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_vpn": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_icloud_relay": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_cloudflare_warp": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_proxy": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_datacenter": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_anonymous": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_known_attacker": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_known_abuser": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_threat": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_bogon": {
+            "type": "boolean"
+          },
+          "blocklists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Blocklist"
+            }
+          },
+          "blocklist_count": {
+            "type": "integer"
+          },
+          "scores": {
+            "$ref": "#/components/schemas/ThreatScores"
+          },
+          "anonymizer_exemptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnonymizerExemptionReason"
+            }
+          }
+        },
+        "required": [
+          "is_tor",
+          "is_vpn",
+          "is_icloud_relay",
+          "is_cloudflare_warp",
+          "is_proxy",
+          "is_datacenter",
+          "is_anonymous",
+          "is_known_attacker",
+          "is_known_abuser",
+          "is_threat",
+          "is_bogon",
+          "blocklists",
+          "blocklist_count",
+          "scores"
+        ],
+        "additionalProperties": false,
+        "description": "Threat signals. A null flag means no evidence either way."
+      },
+      "ThreatScores": {
+        "type": "object",
+        "properties": {
+          "vpn_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "proxy_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "threat_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "trust_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "vpn_score",
+          "proxy_score",
+          "threat_score",
+          "trust_score"
+        ],
+        "additionalProperties": false
+      },
+      "TimeZone": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "abbr": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "string"
+          },
+          "is_dst": {
+            "type": "boolean"
+          },
+          "current_time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "abbr",
+          "offset",
+          "is_dst",
+          "current_time"
+        ],
+        "additionalProperties": false
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/Product"
+          },
+          "balanceMicros": {
+            "type": "number",
+            "description": "Remaining balance in micro-CNY."
+          }
+        },
+        "required": [
+          "product",
+          "balanceMicros"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}
